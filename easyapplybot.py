@@ -20,7 +20,7 @@ import yaml
 from datetime import datetime, timedelta
 
 log = logging.getLogger(__name__)
-driver = webdriver.Chrome(ChromeDriverManager().install())
+driver = webdriver.Edge()
 
 
 def setupLogger() -> None:
@@ -52,7 +52,8 @@ class EasyApplyBot:
                  uploads={},
                  filename='output.csv',
                  blacklist=[],
-                 blackListTitles=[]) -> None:
+                 blackListTitles=[],
+                 joblistFilterKeys=[]) -> None:
 
         log.info("Welcome to Easy Apply Bot")
         dirpath: str = os.getcwd()
@@ -62,13 +63,14 @@ class EasyApplyBot:
         past_ids: list | None = self.get_appliedIDs(filename)
         self.appliedJobIDs: list = past_ids if past_ids != None else []
         self.filename: str = filename
-        self.options = self.browser_options()
-        self.browser = driver
-        self.wait = WebDriverWait(self.browser, 30)
+        self.phone_number = phone_number
         self.blacklist = blacklist
         self.blackListTitles = blackListTitles
-        self.start_linkedin(username, password)
-        self.phone_number = phone_number
+        self.joblistFilterKeys = joblistFilterKeys
+#       self.options = self.browser_options()
+#       self.browser = driver
+#       self.wait = WebDriverWait(self.browser, 30)
+#       self.start_linkedin(username, password)
 
     def get_appliedIDs(self, filename) -> list | None:
         try:
@@ -121,11 +123,40 @@ class EasyApplyBot:
         self.browser.set_window_size(1, 1)
         self.browser.set_window_position(2000, 2000)
 
-    def start_apply(self, positions, locations) -> None:
+    def start_apply(self, positions, locations, jobfilters) -> None:
         start: float = time.time()
         self.fill_data()
 
-        
+        #Here goes filters transition from yaml data to an url part
+        joblistFilterKeysMap = {
+            "sort by" : ["Most Relevant", "Most Recent"],
+            "date posted" : ["Any Time", "Past Month", "Past Week", "Past 24 hours"],
+            "fast apply enabler" : ["Fast Apply", "Usual Apply"]
+            }
+
+        joblistFilterKeysMapAlignment = {
+            "Most Relevant" : "R",
+            "Most Recent" : "DD",
+            "Any Time" : None,
+            "Past Week" : "r604800",
+            "Past Month" : "r2592000",
+            "Past 24 hours" : "r86400"
+            "Fast Apply" : "f_AL",
+            "Usual Apply" : None
+            }
+
+        joblistFilterKeysMapSearch = {
+            "sort by" : "sortBy",
+            "date posted" : "f_TPR",
+            "fast apply enabler" : "f_LF"
+            }
+
+        filterkeys = str()
+        for element in jobfilters:
+            if joblistFilterKeysMapAlignment[element] != None:
+                for key in joblistFilterKeysMap:
+                    if element in joblistFilterKeysMap[key]:
+                        filterkeys=filterkeys+"&"+joblistFilterKeysMapSearch[key]+"="+joblistFilterKeysMapAlignment[element]
 
         combos: list = []
         while len(combos) < len(positions) * len(locations):
@@ -134,15 +165,16 @@ class EasyApplyBot:
             combo: tuple = (position, location)
             if combo not in combos:
                 combos.append(combo)
-                log.info(f"Applying to {position}: {location}")
+                log.info(f"Applying to {position}: {location}; filters {', '.join(jobfilters)}")
                 location = "&location=" + location
-                self.applications_loop(position, location)
+                self.applications_loop(position, location, filterkeys)
             if len(combos) > 500:
+                log.error("More than 500 combos in search")
                 break
 
     # self.finish_apply() --> this does seem to cause more harm than good, since it closes the browser which we usually don't want, other conditions will stop the loop and just break out
 
-    def applications_loop(self, position, location):
+    def applications_loop(self, position, location, filterkeys):
 
         count_application = 0
         count_job = 0
@@ -153,7 +185,7 @@ class EasyApplyBot:
 
         self.browser.set_window_position(1, 1)
         self.browser.maximize_window()
-        self.browser, _ = self.next_jobs_page(position, location, jobs_per_page)
+        self.browser, _ = self.next_jobs_page(position, location, filterkeys, jobs_per_page)
         log.info("Looking for jobs.. Please wait..")
 
         while time.time() - start_time < self.MAX_SEARCH_TIME:
@@ -458,10 +490,10 @@ class EasyApplyBot:
         time.sleep(0.5)
         pyautogui.press('esc')
 
-    def next_jobs_page(self, position, location, jobs_per_page):
+    def next_jobs_page(self, position, location, filterKeys, jobs_per_page):
         self.browser.get(
-            "https://www.linkedin.com/jobs/search/?f_LF=f_AL&keywords=" +
-            position + location + "&start=" + str(jobs_per_page))
+            "https://www.linkedin.com/jobs/search/?&keywords=" +
+            position + location + filterKeys + "&start=" + str(jobs_per_page))
         self.avoid_lock()
         log.info("Lock avoided.")
         self.load_page()
@@ -496,7 +528,8 @@ if __name__ == '__main__':
     output_filename: list = output_filename[0] if len(output_filename) > 0 else 'output.csv'
     blacklist = parameters.get('blacklist', [])
     blackListTitles = parameters.get('blackListTitles', [])
-
+    joblistFilterKeys = parameters.get('joblistFilterKeys', [])
+    
     uploads = {} if parameters.get('uploads', {}) == None else parameters.get('uploads', {})
     for key in uploads.keys():
         assert uploads[key] != None
@@ -507,9 +540,11 @@ if __name__ == '__main__':
                        uploads=uploads,
                        filename=output_filename,
                        blacklist=blacklist,
-                       blackListTitles=blackListTitles
+                       blackListTitles=blackListTitles,
+                       joblistFilterKeys=joblistFilterKeys
                        )
 
     locations: list = [l for l in parameters['locations'] if l != None]
     positions: list = [p for p in parameters['positions'] if p != None]
-    bot.start_apply(positions, locations)
+    joblistFilterKeys: list = [k for k in parameters['joblistFilterKeys'] if k != None]
+#    bot.start_apply(positions, locations, joblistFilterKeys)
