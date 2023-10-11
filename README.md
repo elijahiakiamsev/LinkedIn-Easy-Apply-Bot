@@ -29,14 +29,14 @@ locations:
 - # Location you want to search for
 - # A second location you want to search in 
 
+# --------- Optional Parameters -------
 uploads:
  Resume: # PATH TO Resume 
  Cover Letter: # PATH TO cover letter
  Photo: # PATH TO photo
 # Note file_key:file_paths contained inside the uploads section should be writted without a dash ('-') 
 
-outputFilename:
-- # PATH TO OUTPUT FILE (default output.csv)
+outputFilename: # PATH TO OUTPUT FILE (default output.csv)
 
 blackListCompanies:
 - # Company names you want to ignore
@@ -74,8 +74,11 @@ python3 easyapplybot.py --config private/config.yaml
 ### Additional parameters
 ```
 options:
-  -h, --help       show this help message and exit
-  --config CONFIG  configuration file, YAML formatted (default: config.yaml)
-  --forcelogin     force login no matter cookies (default: False)
-  --nobot          do all the setup but not start the bot (default: False)
+  -h, --help            show this help message and exit
+  --config CONFIG       configuration file, YAML formatted (default:
+                        config.yaml)
+  --forcelogin          force login no matter cookies (default: False)
+  --nobot               do all setup but not start the bot (default: False)
+  --fastapply FASTAPPLY fast apply the job by id without the apply loop
+
 ```
