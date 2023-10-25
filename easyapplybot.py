@@ -1,5 +1,5 @@
 from __future__ import annotations
-import time, random, os, csv, sys, platform
+import time, random, os, csv, sys
 import logging
 import argparse
 import pickle
@@ -11,7 +11,6 @@ from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.keys import Keys
-from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
@@ -19,9 +18,6 @@ import bs4
 import pandas as pd
 import pyautogui
 
-from urllib.request import urlopen
-
-import re
 import yaml
 from datetime import datetime, timedelta
 
@@ -65,7 +61,7 @@ class EasyApplyBot:
 
     def __init__(self,
                  userParameters: dict = None,
-                 cookies=[]) -> None:
+                 cookies: list = []) -> None:
 
         log.info("Welcome to Easy Apply Bot!")
         dirpath: str = os.getcwd()
@@ -81,7 +77,7 @@ class EasyApplyBot:
         self.blackList = userParameters['blackListCompanies']
         self.blackListTitles = userParameters['blackListTitles']
         self.jobListFilterKeys = userParameters['jobListFilterKeys']
-        self.phone_number = userParameters['phoneNumber']
+        self.phoneNumber = userParameters['phoneNumber']
 
         self.jobsData = None
         
@@ -106,11 +102,16 @@ class EasyApplyBot:
 
     def get_appliedIDs(self,
                        filename: str = None) -> list | None:
-        '''Trying to get applied jobs ID from given csv file'''
+        '''Trying to get applied jobs ID from the given csv file'''
         try:
             df = pd.read_csv(filename,
                              header=None,
-                             names=['timestamp', 'jobID', 'job', 'company', 'attempted', 'result'],
+                             names=['timestamp', 
+                                    'jobID',
+                                    'job', 
+                                    'company', 
+                                    'attempted',
+                                    'result'],
                              lineterminator='\n',
                              encoding='utf-8')
             df['timestamp'] = pd.to_datetime(df['timestamp'], format="%Y-%m-%d %H:%M:%S")
@@ -209,7 +210,7 @@ class EasyApplyBot:
                                  + f" a blacklisted keyword"
                                  + " was found in the job title")
                         self.jobsData[key]['skipReason'] = "blacklisted company"
-            # Go easy apply
+            # go easy apply
             self.jobsData = self.easy_apply()
             # sleep for a moment
             sleepTime: int = random.randint(60, 300)
@@ -275,25 +276,14 @@ class EasyApplyBot:
             jobID: int = int(str(block['data-job-id']))
             # create dictionary for each job with ID as the key
             jd[jobID] = {}
-            # extract data from the current card
-            title = block.select_one('div .job-card-list__title')
-            company = block.select_one('div ' 
-                    +'.job-card-container__primary-description')
-            metadata = block.select_one('li'
-                    + ' .job-card-container__metadata-item')
-            applyMethod = block.select_one('li'
-                    + ' .job-card-container__apply-method')
-            jd[jobID]['title'] = title.string
-            jd[jobID]['company'] = company.string
-            jd[jobID]['metadata'] = metadata.get_text()
-            jd[jobID]['applyMethod'] : str = applyMethod.get_text()
-            jd[jobID]['skipReason'] = None
-            # clean data
-            for key in jd:
-                for p in jd[key]:
-                    if jd[key][p] is not None:
-                        jd[key][p] = str(jd[key][p]).strip()
-        #            log.debug(f"{jd[key]} : {p} : {jd[key][p]}")
+            jd[jobID]['title'] = block.select_one('div' 
+                +' .job-card-list__title').get_text().strip()
+            jd[jobID]['company'] = block.select_one('div' 
+                +' .job-card-container__primary-description').get_text().strip()
+            jd[jobID]['metadata'] = block.select_one('li'
+                + ' .job-card-container__metadata-item').get_text().strip()
+            jd[jobID]['applyMethod'] = block.select_one('li'
+                + ' .job-card-container__apply-method').get_text().strip()
         log.info(f"{str(len(jd))} jobs collected on page {page}.")
         return jd
 
@@ -317,198 +307,294 @@ class EasyApplyBot:
             return None
         # Let's loop applications
         for jobID in jobsID:
-            self.apply_easy_job(jobID)
-        self.write_to_file(self.jobsData)
+            jobApplied, sendingText = self.apply_easy_job(jobID)
+            self.write_to_file(jobID, sendingText, jobApplied)
         return None
 
     def apply_easy_job(self,
-                       jobID : int = None) -> dict | None:
+                       jobID : int | None = None,
+                       ) -> (bool, str):
         '''Applying one EASY APPLY job'''
-        log.info(f"Start applying to {self.jobsData[jobID]['title']}, {jobID}")
+        log.info(f"Start applying to {jobID}")
+        jobApplied: bool = False
+        sendingText: str
         if jobID is None:
-            log.warning("No job sended to apply.")
-            log.debug("The jobID is 'None'.")
-            return None
+            jobApplied = False
+            sendingText = "No job sended to apply"
+            log.warning(sendingText)
+            log.debug(f"The jobID is {str(jobID)}.")
+            return jobApplied, sendingText
         self.get_job_page(jobID)
         # get easy apply button
         button = self.get_easy_apply_button()
-        if button is not False:
-            log.info("Clicking the EASY apply button")
-            button.click()
-            time.sleep(3)
-            self.fill_out_phone_number()
-            result: bool = self.send_resume()
-            if result is False:
-                log.info(f"resume for {jobID} is not sended")
-                self.browser.get_screenshot_as_png('screenshot_send_'
-                                                    + str(jobID)
-                                                    + '.png')
+        # if there is no Easy Apply button
+        if button is False:
+            sendingText = f"The EASY APPLY button does not exist for the job id {str(jobID)}."
+            log.warning(sendingText)
+            jobApplied = False
+            return jobApplied, sendingText
+        # easy apply button exists! click!
+        log.info("Clicking the EASY APPLY button...")
+        button.click()
+        time.sleep(3)
+        # fill these pop-up forms and send the answer
+        # breaks on error message and on success window
+        jobApplied, sendingText = self.send_resume()
+        if jobApplied is False:
+            log.info(f"resume for {jobID} is not sended")
+            log.info(f"The reason is {sendingText}")
+            self.write_parsing_error(jobID)
             log.debug(f"Button cycle is finished")
-        else:
-            log.info("The EASY APPLY button does not exist.")
-            self.browser.get_screenshot_as_png(str('screenshot_ea_button_'
-                                               + str(jobID)
-                                               + '.png'))
-            self.jobsData[jobID]['skipReason'] = "No 'Easy Apply' button"
-        self.jobsData[jobID]['result'] = result
-        return None
+        return jobApplied, sendingText
 
-    def write_to_file(self) -> None:
+    def write_parsing_error(self, jobID) -> (bool, str):
+        '''Get full information about error in the modal window'''
+        dumpDir: str = "./logs/screenshots"
+        screenshotPath: str = f"{dumpDir}/{jobID}/error.png"
+        htmlDumpPath: str = f"{dumpDir}/{jobID}/error.html" 
+        log.debug(f'Writing error to {dumpDir}...')
+        #check directory
+        if not os.path.isdir(f'{dumpDir}'):
+            os.mkdir(f'{dumpDir}')
+        if os.path.isdir(f'{dumpDir}/{jobID}'):
+            if os.path.isfile(screenshotPath):
+                os.remove(screenshotPath)
+            if os.path.isfile(htmlDumpPath):
+                os.remove(htmlDumpPath)
+            os.rmdir(f'{dumpDir}/{jobID}')
+        os.mkdir(f'{dumpDir}/{jobID}')
+        #write screenshot
+        self.browser.get_screenshot_as_file(screenshotPath)
+        log.debug(f"Screenshot: {screenshotPath}")
+        #get webelement div data-test-modal get_attribute('outerHTML')
+        modalElement = self.browser.find_element(By.XPATH, "//div[contains(@class, 'jobs-easy-apply-modal')]")
+        html = f'''{modalElement.get_attribute('outerHTML')}'''
+        #write to file webelement html
+        with open(htmlDumpPath, "w", encoding="utf-8") as file:
+            file.write(html)
+            log.debug(f"Html dump: {htmlDumpPath}")
+        return True, 'All ok with error'
+
+    def write_to_file(self,
+                      jobID: int,
+                      result: bool,
+                      title: str = 'Unknown',
+                      company: str = 'Unknown',
+                      sendingText: str = 'Unknown',
+                      filename: str = 'Unknown'
+                      ) -> None:
+        log.debug(f"Writting result of applying {jobID} to file...")
         timestamp: str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        with open(self.filename, 'a') as f:
-            for jobID in self.jobsData:
-                toWrite: list = [timestamp,
-                                 jobID,
-                                 self.jobsData[jobID]['title'],
-                                 self.jobsData[jobID]['company'],
-                                 self.jobsData[jobID]['skipReason'],
-                                 self.jobsData[jobID]['result']]
+        if filename == "Unknown": filename = self.filename
+        log.debug(f"Saving {filename} : {timestamp}; {result}; {title}; {company}; {sendingText}")
+        with open(filename, 'a', encoding="utf-8") as f:
+            toWrite: list = [timestamp,
+                             jobID,
+                             title,
+                             company,
+                             sendingText,
+                             str(result)]
             writer = csv.writer(f)
             writer.writerow(toWrite)
-        self.dump_current_jobs_to_log('write_to_file')
         return None
 
-
-    def get_job_page(self, jobID):
+    def get_job_page(self, jobID: int):
+        '''Getting the job page'''
+        log.debug(f"Getting {str(jobID)} page...")
         job: str = 'https://www.linkedin.com/jobs/view/' + str(jobID)
         self.browser.get(job)
-        self.job_page = self.load_page(sleep=0.5)
-        return self.job_page
+        self.load_page(sleep=0.5)
+        return None
 
     def get_easy_apply_button(self):
+        log.debug('Getting EASY APPLY button...')
         try:
             button = self.browser.find_elements("xpath",
-                '//button[contains(@class, "jobs-apply-button")]'
-            )
-            EasyApplyButton = button[0]
+                '//div[contains(@class, "jobs-apply-button--top-card")]//button[contains(@class, "jobs-apply-button")]')
+            easyApplyButton = button[0]
+            log.debug(easyApplyButton.tag_name)
         except Exception as e: 
-            log.debug("Exception:",e)
-            EasyApplyButton = False
-        return EasyApplyButton
+            log.debug("Exception:", e)
+            easyApplyButton = False
+        log.debug(f"Button is enabled? {easyApplyButton.is_enabled()}")
+        log.debug(f"Button is displayed? {easyApplyButton.is_displayed()}")
+        return easyApplyButton
 
-    def fill_out_phone_number(self):
-        def is_present(button_locator) -> bool:
-            return len(self.browser.find_elements(button_locator[0],
-                                                  button_locator[1])) > 0
-        # try:
-        next_locater = (By.CSS_SELECTOR,
-                        "button[aria-label='Continue to next step']")
+    def send_resume(self) -> (bool, str):
+        '''The sending resume loop'''
+        locatorsBlueprint: dict = {"next" : {"xpath" : "//button[@aria-label='Continue to next step']",
+                                             "action" : "nextPage"},
+                "review" : {"xpath" : "//button[@aria-label='Review your application']",
+                                             "action" : "nextPage"},
+                "submit" : {"xpath" : "//button[@aria-label='Submit application']",
+                                             "action" : "nextPage"},
+                "error" : {"xpath" : "//div[@data-test-form-element-error-messages]",
+                                             "action" : "error"},
+                "follow" : {"xpath" : "//label[@for='follow-company-checkbox']",
+                                             "action" : "fill"},
+                "homeAddress" : {"xpath" : "//h3[contains(text(),'Home address')]",
+                                             "action" : "fill"},
+                "photo" : {"xpath" : "//span[contains(@class,'t-14') and contains(text(),'Photo')]",
+                                             "action" : "fill"},
+                "resume" : {"xpath" : "//span[contains(text(),'Be sure to include an updated resume')]",
+                                             "action" : "upload"},
+                "coverLetter" : {"xpath" : "//label[contains(text(),'Cover letter')]",
+                                             "action" : "upload"},
+                "succsess" : {"xpath" : "//h2[@id='post-apply-modal']",
+                                             "action" : None},
+                "phone" : {"xpath" : "//input[contains(@id,'phoneNumber-nationalNumber')]",
+                                             "action" : "fill"}
+                }
+        submitted: bool = False
 
-        input_field = self.browser.find_element(By.CSS_SELECTOR, "input.artdeco-text-input--input[type='text']")
+        def get_easy_apply_locators(blueprint: dict = locatorsBlueprint
+                                         ) -> (dict | None, str):
+            '''Scan an EASY APPLY page for avaiable locators'''
+            log.debug('Scanning page for locators...')
+            # Create dictionary of possible locators
+            lc: dict | None = blueprint
+            lcMessage: str = ''
+            # Get elements and clean data
+            for key in lc:
+                try:
+                    e = self.browser.find_element(By.XPATH, lc[key]['xpath'])
+                    lc[key]['element'] = e
+                except:
+                    lc[key]['element'] = None
+            # Check for any valuable data
+            if all(lc[key]['element'] == None for key in lc):
+                lc = None
+                lcMessage = 'No element is found on the page'
+            else:
+                log.debug('Locators found:')
+                for key in lc:
+                    if lc[key]['element'] is not None:
+                        log.debug(f"{key} :")
+                        log.debug(f"{key} : xpath : {str(lc[key]['xpath'])}")
+                        log.debug(f"{key} : action : {str(lc[key]['action'])}")
+                        log.debug(f"{key} : element : {str(lc[key]['element'])}")
+            return lc, lcMessage
+        
+        def check_locators(locators: dict) -> (bool, str):
+            '''All negative checks to continue in one place'''
+            log.debug("Checks to continue started..")
+            checkStatus : bool = True
+            checkMessage : str = "All checks passed."
+            # Didn't found anything on the page
+            if locators is None :
+                checkStatus = False
+                checkMessage = "No locators found on the page."
+            # Found an Error on page
+            if locators['error']['element'] is not None:
+                checkStatus = False
+                checkMessage = f"EASY APPLY skipped by error: {locators['error']['element'].text}"
+            # Didn't find any button to continue
+            if len({key for key in locators if locators[key]['action'] == 'nextPage'}) == 0:
+                checkStatus = False
+                checkMessage = "EASY APPLY skipped by error: no continue buttons found"
+            # Found more than one button to continue
+            if len({key for key in locators if locators[key]['action'] == 'nextPage'
+                    and locators[key]['element'] is not None}) > 1:
+                checkStatus = False
+                log.debug(f"Length of buttons dict: {len({key for key in locators if locators[key]['action'] == 'nextPage' and locators[key]['element'] is not None})}")
+                checkMessage = "EASY APPLY skipped by error: more than one button found"
+            # All good
+            log.debug(f"Check status {str(checkStatus)} : {checkMessage}")
+            return checkStatus, checkMessage
 
-        if input_field:
-            input_field.clear()
-            input_field.send_keys(self.phone_number)
-            time.sleep(random.uniform(4.5, 6.5))
+        def upload_resume(locators: dict) -> bool:
+            '''Upload resume'''
+            # Check for data
+            if locators['resume'] is None :
+                log.debug("No resume locator sended in upload function")
+                return False
+            log.debug("Resume upload started...")
+            input_buttons = self.browser.find_elements(locators['resume'][0],
+                                                    locators['resume'][1])
+            for input_button in input_buttons:
+                parent = input_button.find_element(By.XPATH, "..")
+                sibling = parent.find_element(By.XPATH, "preceding-sibling::*[1]")
+                grandparent = sibling.find_element(By.XPATH, "..")
+                for key in self.uploads.keys():
+                    sibling_text = sibling.text
+                    gparent_text = grandparent.text
+                    if key.lower() in sibling_text.lower() or key in gparent_text.lower():
+                        input_button.send_keys(self.uploads[key])
+            return False
 
-            next_locater = (By.CSS_SELECTOR,
-                            "button[aria-label='Continue to next step']")
-            error_locator = (By.CSS_SELECTOR,
-                             "p[data-test-form-element-error-message='true']")
+        def fill_the_phone_number(locators: dict) -> bool:
+            '''Fill the phone number correctly'''
+            log.debug("Senging the phone number...")
+            phoneField = locators['phone']['element']
+            if phoneField:
+                phoneField.clear()
+                phoneField.send_keys(self.phoneNumber)
+                log.debug("Phone number is sended.")
+            else:
+                log.error("No phone element.")
+                return False
+            return True
+        
+        def uncheck_follow(locators: dict) -> bool:
+            return False
+        
+        def fill_address(locators: dict) -> bool:
+            return False
 
-            # Click Next or submitt button if possible
-            button: None = None
-            if is_present(next_locater):
-                button: None = self.wait.until(EC.element_to_be_clickable(next_locater))
+        def upload_photo(locators: dict) -> bool:
+            return False
 
-            if is_present(error_locator):
-                for element in self.browser.find_elements(error_locator[0],
-                                                            error_locator[1]):
-                    text = element.text
-                    if "Please enter a valid answer" in text:
-                        button = None
-                        self.browser.get_screenshot_as_png('screenshot_phone_number.png')
-                        break
+        def press_next_button(locators: dict) -> bool:
+            '''Pressing next, review or submit button'''
+            log.debug("Pressing next page button...")
+            pressingResult: bool = True
+            pressingMessage: str = ''
+            # Get active button on page
+            for key in locators:
+                if locators[key]['action'] == 'nextPage' and locators[key]['element'] is not None:
+                    buttonToPress = locators[key]['element']
+            # Check for one button (at least)
+            button = self.wait.until(EC.element_to_be_clickable(buttonToPress))
             if button:
                 button.click()
-                time.sleep(random.uniform(1.5, 2.5))
-                # if i in (3, 4):
-                #     submitted = True
-                # if i != 2:
-                #     break
-        else:
-            log.debug(f"Could not find phone number field")
+                pressingMessage = (f"Button '{key}' is clicked.")
+            else:
+                pressingMessage = ("Can't press the button")
+            log.debug(f"Pressing result: {pressingResult}, {pressingMessage}")
+            return pressingResult, pressingMessage
 
-    def send_resume(self) -> bool:
-        def is_present(button_locator) -> bool:
-            return len(self.browser.find_elements(button_locator[0],
-                                                  button_locator[1])) > 0
-        try:
+        log.debug("Starting apply loop...")
+        while True:
+            locators, message = get_easy_apply_locators()
+            # Check to continue (fail fast)
+            isItGood, message = check_locators(locators)
+            if not isItGood :
+                log.debug("Check failed, breaking the loop.")
+                break
+            # Found final message
+            if locators['succsess']['element'] is not None:
+                log.info(f"EASY APPLY done.")
+                submitted = True
+                message = "All good!"
+                break
+            # Let's fill known forms and upload known files
             time.sleep(random.uniform(1.5, 2.5))
-            next_locater = (By.CSS_SELECTOR,
-                            "button[aria-label='Continue to next step']")
-            review_locater = (By.CSS_SELECTOR,
-                              "button[aria-label='Review your application']")
-            submit_locater = (By.CSS_SELECTOR,
-                              "button[aria-label='Submit application']")
-            submit_application_locator = (By.CSS_SELECTOR,
-                                          "button[aria-label='Submit application']")
-            error_locator = (By.CSS_SELECTOR,
-                             "p[data-test-form-element-error-message='true']")
-            upload_locator = upload_locator = (By.CSS_SELECTOR, "button[aria-label='DOC, DOCX, PDF formats only (5 MB).']")
-            follow_locator = (By.CSS_SELECTOR, "label[for='follow-company-checkbox']")
-
-            submitted = False
-            while True:
-
-                # Upload Cover Letter if possible
-                if is_present(upload_locator):
-
-                    input_buttons = self.browser.find_elements(upload_locator[0],
-                                                               upload_locator[1])
-                    for input_button in input_buttons:
-                        parent = input_button.find_element(By.XPATH, "..")
-                        sibling = parent.find_element(By.XPATH, "preceding-sibling::*[1]")
-                        grandparent = sibling.find_element(By.XPATH, "..")
-                        for key in self.uploads.keys():
-                            sibling_text = sibling.text
-                            gparent_text = grandparent.text
-                            if key.lower() in sibling_text.lower() or key in gparent_text.lower():
-                                input_button.send_keys(self.uploads[key])
-
-                    # input_button[0].send_keys(self.cover_letter_loctn)
-                    time.sleep(random.uniform(4.5, 6.5))
-
-                # Click Next or submitt button if possible
-                button: None = None
-                buttons: list = [next_locater, review_locater, follow_locator,
-                           submit_locater, submit_application_locator]
-                for i, button_locator in enumerate(buttons):
-                    if is_present(button_locator):
-                        button: None = self.wait.until(EC.element_to_be_clickable(button_locator))
-
-                    if is_present(error_locator):
-                        for element in self.browser.find_elements(error_locator[0],
-                                                                  error_locator[1]):
-                            text = element.text
-                            if "Please enter a valid answer" in text:
-                                button = None
-                                break
-                    if button:
-                        button.click()
-                        time.sleep(random.uniform(1.5, 2.5))
-                        if i in (3, 4):
-                            submitted = True
-                        if i != 2:
-                            break
-                if button == None:
-                    log.info("Could not complete submission")
-                    break
-                elif submitted:
-                    log.info("Application Submitted")
-                    break
-
+            if locators['phone']['element'] is not None:
+                fill_the_phone_number(locators)
+# TODO           fill_address(locators)
+# TODO           upload_resume(locators)
+# TODO           upload_photo(locators)
+# TODO           uncheck_follow(locators)
+            time.sleep(random.uniform(4.5, 6.5))
+            if press_next_button(locators) == False:
+                submitted = False
+                message = "Can't press any button"
+                break
             time.sleep(random.uniform(1.5, 2.5))
-
-        except Exception as e:
-            log.info(e)
-            log.info("cannot apply to this job")
-            raise (e)
-
-        return submitted
+        return submitted, message
 
     def load_page(self, sleep=1):
-        log.debug("Load page like human mode...")
+        log.debug("Load page like a human mode...")
         scroll_page = 0
         while scroll_page < 4000:
             self.browser.execute_script("window.scrollTo(0," + str(scroll_page) + " );")
@@ -576,7 +662,7 @@ class EasyApplyBot:
         # Store the column in soup lxml structure
         soup = bs4.BeautifulSoup(htmlChunk, "lxml")
         if soup is None:
-            log.debug(f"Soup is not created.")
+            log.warning(f"Soup is not created.")
             return None
         log.debug(f"Soup is created.")
         # TODO check full jobcard column load
@@ -796,7 +882,7 @@ def login_to_LinkedIn(login: dict = None,
                 cookies = pickle.load(open(cookiesFileName, "rb"))
                 log.debug(f"Cookies loaded")
             except:
-                log.error("Something wrong withthe cookie file")
+                log.error("Something wrong with the cookie file")
                 raise
             loginExpires = [cookie['expiry'] for cookie in cookies
                             if cookie['name'] == 'li_at'][0]
@@ -867,13 +953,10 @@ def main() -> None:
     configCommandString = parse_command_line_parameters(sys.argv[1:])
     userParameters, login = read_configuration(configCommandString['config'])
 
-
     cookies = login_to_LinkedIn(login,
                                 configCommandString['config'],
                                 browserOptions,
                                 configCommandString['forcelogin'])
-
-    log.debug(f"Output filename: {userParameters['outputFilename']}")
 
     if configCommandString['nobot']:
         log.info("Launched with --nobot parameter. Forced exit.")
@@ -887,15 +970,14 @@ def main() -> None:
                                userParameters['jobListFilterKeys'])
     else:
         log.info(f"Fast apply for {configCommandString['fastapply']} requested")
-        fastApplyJob: dict = {int(configCommandString['fastapply']) :
-                                {'title' : 'Fast Apply Forced Title',
-                                 'company' : 'Fast Apply Forced Company',
-                                 'metadata' : 'Fast Apply Forced Metadata',
-                                 'applyMethod' : 'Easy Apply'
-                                }
-                              }
-        bot.apply_easy_job(fastApplyJob)
-        bot.write_to_file()
+        jobApplied, sendingText = bot.apply_easy_job(int(configCommandString['fastapply']))
+        bot.write_to_file(configCommandString['fastapply'],
+                          jobApplied,
+                          'Fast Apply Title',
+                          'Fast Apply Company',
+                          sendingText,
+                          userParameters['outputFilename']
+                          )
         log.info(f"Forced easy apply cycle for"
                  + f" {configCommandString['fastapply']} finished.")
 
