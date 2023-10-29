@@ -1,8 +1,6 @@
 from __future__ import annotations
 import time, random, os, csv, sys
 import logging
-import argparse
-import pickle
 import datetime
 from itertools import product
 from selenium import webdriver
@@ -17,45 +15,15 @@ from selenium.webdriver.support import expected_conditions as EC
 import bs4
 import pandas as pd
 import pyautogui
+import ignition
+import linkedinapply as LA
 
 import yaml
 from datetime import datetime, timedelta
 
-log = logging.getLogger(__name__)
-
-def setupLogger() -> None:
-    dt: str = datetime.strftime(datetime.now(), "%m_%d_%y %H_%M_%S ")
-
-    if not os.path.isdir('./logs'):
-        os.mkdir('./logs')
-
-    # TODO need to check if there is a log dir available or not
-    logging.basicConfig(filename=('./logs/' + str(dt) + 'applyJobs.log'),
-                        filemode='w',
-                        format='%(asctime)s::%(name)s::%(levelname)s::%(message)s',
-                        datefmt='./logs/%d-%b-%y %H:%M:%S')
-    log.setLevel(logging.INFO)
-    c_handler = logging.StreamHandler()
-    c_handler.setLevel(logging.INFO)
-    c_format = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', '%H:%M:%S')
-    c_handler.setFormatter(c_format)
-    log.addHandler(c_handler)
-    return None
-
-def get_browser_options():
-    '''Configure browser to be less scrape-type'''
-    options = Options()
-    options.add_argument("--start-maximized")
-    options.add_argument("--ignore-certificate-errors")
-    options.add_argument('--no-sandbox')
-    options.add_argument("--disable-extensions")
-    # Disable webdriver flags or you will be easily detectable
-    options.add_argument("--disable-blink-features")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    return options
-
+log = logging.getLogger('mainLogger')
+ignition.setupLogger()
 class EasyApplyBot:
-    setupLogger()
     # MAX_SEARCH_TIME is 10 hours by default, feel free to modify it
     MAX_SEARCH_TIME = 10 * 60 * 60
 
@@ -73,7 +41,6 @@ class EasyApplyBot:
         self.filename: str = userParameters['outputFilename']
         past_ids: list | None = self.get_appliedIDs(self.filename)
         self.appliedJobIDs: list = past_ids if past_ids != None else []
-        
         self.blackList = userParameters['blackListCompanies']
         self.blackListTitles = userParameters['blackListTitles']
         self.jobListFilterKeys = userParameters['jobListFilterKeys']
@@ -82,7 +49,7 @@ class EasyApplyBot:
         self.jobsData = None
         
         #browser start
-        self.options = get_browser_options()
+        self.options = ignition.get_browser_options()
         self.cookies = cookies
         try:
             self.browser = webdriver.Chrome(service = 
@@ -98,6 +65,10 @@ class EasyApplyBot:
         for cookie in self.cookies: self.browser.add_cookie(cookie)
         self.wait = WebDriverWait(self.browser, 30)
         log.debug("Cookies sended.")
+
+        self.seeder = LA.LinkedInSeeder(browser=self.browser)
+        self.seedEA = LA.EasyApplySeeder(browser=self.browser)
+
         return None
 
     def get_appliedIDs(self,
@@ -211,7 +182,7 @@ class EasyApplyBot:
                                  + " was found in the job title")
                         self.jobsData[key]['skipReason'] = "blacklisted company"
             # go easy apply
-            self.jobsData = self.easy_apply()
+            self.easy_apply()
             # sleep for a moment
             sleepTime: int = random.randint(60, 300)
             log.info(f"Time for a nap - see you in:{int(sleepTime/60)} min.")
@@ -225,8 +196,8 @@ class EasyApplyBot:
         start_time: float = time.time()
         self.jobsData: dict = {}
         jobsDataDelta: dict = {}
-        self.browser.set_window_position(1, 1)
-        self.browser.maximize_window()
+#        self.browser.set_window_position(1, 1)
+#        self.browser.maximize_window()
         jobSearchPages = 3
         for jobSearchPage in range(1, jobSearchPages):
             log.debug(f"jobSearchPage - {jobSearchPage}")
@@ -282,8 +253,8 @@ class EasyApplyBot:
                 +' .job-card-container__primary-description').get_text().strip()
             jd[jobID]['metadata'] = block.select_one('li'
                 + ' .job-card-container__metadata-item').get_text().strip()
-            jd[jobID]['applyMethod'] = block.select_one('li'
-                + ' .job-card-container__apply-method').get_text().strip()
+#            jd[jobID]['applyMethod'] = block.select_one('li'
+#                + ' .job-card-container__apply-method').get_text().strip()
         log.info(f"{str(len(jd))} jobs collected on page {page}.")
         return jd
 
@@ -296,16 +267,15 @@ class EasyApplyBot:
             return None
         self.dump_current_jobs_to_log()
         # Extract JobID, ensure of correct apply method
-        jobsID = [k for k in self.jobsData
-                   if (self.jobsData[k]['applyMethod'] == 'Easy Apply')
-                   and (self.jobsData[k]['skipReason'] is None)
-                ]
+        jobsID = [k for k in self.jobsData]
         log.debug(f"{str(jobsID)} - {type(jobsID)}")
         # Check for zero list
         if len(jobsID) == 0:
             log.info("Zero Easy Apply jobs found, skip section.")
             return None
         # Let's loop applications
+        self.seeder.setJobIDs(jobsID)
+
         for jobID in jobsID:
             jobApplied, sendingText = self.apply_easy_job(jobID)
             self.write_to_file(jobID, sendingText, jobApplied)
@@ -474,33 +444,6 @@ class EasyApplyBot:
                         log.debug(f"{key} : action : {str(lc[key]['action'])}")
                         log.debug(f"{key} : element : {str(lc[key]['element'])}")
             return lc, lcMessage
-        
-        def check_locators(locators: dict) -> (bool, str):
-            '''All negative checks to continue in one place'''
-            log.debug("Checks to continue started..")
-            checkStatus : bool = True
-            checkMessage : str = "All checks passed."
-            # Didn't found anything on the page
-            if locators is None :
-                checkStatus = False
-                checkMessage = "No locators found on the page."
-            # Found an Error on page
-            if locators['error']['element'] is not None:
-                checkStatus = False
-                checkMessage = f"EASY APPLY skipped by error: {locators['error']['element'].text}"
-            # Didn't find any button to continue
-            if len({key for key in locators if locators[key]['action'] == 'nextPage'}) == 0:
-                checkStatus = False
-                checkMessage = "EASY APPLY skipped by error: no continue buttons found"
-            # Found more than one button to continue
-            if len({key for key in locators if locators[key]['action'] == 'nextPage'
-                    and locators[key]['element'] is not None}) > 1:
-                checkStatus = False
-                log.debug(f"Length of buttons dict: {len({key for key in locators if locators[key]['action'] == 'nextPage' and locators[key]['element'] is not None})}")
-                checkMessage = "EASY APPLY skipped by error: more than one button found"
-            # All good
-            log.debug(f"Check status {str(checkStatus)} : {checkMessage}")
-            return checkStatus, checkMessage
 
         def upload_resume(locators: dict) -> bool:
             '''Upload resume'''
@@ -520,28 +463,6 @@ class EasyApplyBot:
                     gparent_text = grandparent.text
                     if key.lower() in sibling_text.lower() or key in gparent_text.lower():
                         input_button.send_keys(self.uploads[key])
-            return False
-
-        def fill_the_phone_number(locators: dict) -> bool:
-            '''Fill the phone number correctly'''
-            log.debug("Senging the phone number...")
-            phoneField = locators['phone']['element']
-            if phoneField:
-                phoneField.clear()
-                phoneField.send_keys(self.phoneNumber)
-                log.debug("Phone number is sended.")
-            else:
-                log.error("No phone element.")
-                return False
-            return True
-        
-        def uncheck_follow(locators: dict) -> bool:
-            return False
-        
-        def fill_address(locators: dict) -> bool:
-            return False
-
-        def upload_photo(locators: dict) -> bool:
             return False
 
         def press_next_button(locators: dict) -> bool:
@@ -567,7 +488,7 @@ class EasyApplyBot:
         while True:
             locators, message = get_easy_apply_locators()
             # Check to continue (fail fast)
-            isItGood, message = check_locators(locators)
+            isItGood, message = self.seedEA.checkLocators(locators)
             if not isItGood :
                 log.debug("Check failed, breaking the loop.")
                 break
@@ -580,7 +501,8 @@ class EasyApplyBot:
             # Let's fill known forms and upload known files
             time.sleep(random.uniform(1.5, 2.5))
             if locators['phone']['element'] is not None:
-                fill_the_phone_number(locators)
+                self.seedEA.fillPhoneNumber(locators['phone']['element'],
+                                            self.phoneNumber)
 # TODO           fill_address(locators)
 # TODO           upload_resume(locators)
 # TODO           upload_photo(locators)
@@ -691,269 +613,18 @@ class EasyApplyBot:
         log.debug(f"*** End of jobs for {context}")
         return None
 
-def read_configuration(configFile: str = 'config.yaml') -> tuple[dict, dict]:
-    """
-    Unpack the configuration and check the data format. Username and password
-    are separated from other parameters for security reasons. 
-    """
-    log.info(f"Reading configuration from {configFile} ...")
-    def check_missing_parameters(parametersToCheck: dict = None,
-                                 keysToCheck: list = None) -> None:
-        """Check and add missing parameters if something wrong
-        with a config file
-        """
-        p = parametersToCheck
-        if keysToCheck is None:
-            keysToCheck = ['username',
-                           'password',
-                           'phoneNumber',
-                           'positions',
-                           'locations',
-                           'uploads',
-                           'outputFilename',
-                           'blackListCompanies',
-                           'blackListTitles',
-                           'jobListFilterKeys']
-        for key in keysToCheck:
-            if key not in p:
-                p[key] = None
-                log.debug(f"Check: added missing parameter {key}")
-        
-        for key in list(p.keys()):
-            if key not in keysToCheck:
-               log.warning(f"Check: unknown parameter {key}") 
-
-        log.debug("Checked and added parameters: " + str(p.keys()))
-        return p
-
-    def check_input_data(parametersToCheck: dict = None,
-                         keysToCheck: list = None) -> bool:
-        """Check the parameters data completion."""
-        p = parametersToCheck
-        if keysToCheck is None:
-            keysToCheck = ['username',
-                           'password',
-                           'locations',
-                           'positions',
-                           'phoneNumber']
-        for key in keysToCheck:
-            try:
-                assert key in p
-            except AssertionError as err:
-                log.exception("Parameter '" 
-                              + key
-                              + "' is missing")
-                raise err
-            try:
-                assert p[key] is not None
-            except AssertionError as err:
-                log.exception(f"Parameter '"
-                              + key
-                              + "' is None")
-                raise err
-        try:
-            assert len(p['positions'])*len(p['locations']) < 500
-        except AssertionError as err:
-            log.exception("Too many positions and/or locations")
-            raise err
-        log.debug("Input data checked for completion.")
-        return p
-
-    def removeNone(userParameters: dict = None,
-                    keysToClean: list = None) -> dict:
-        """
-        Remove None from some lists in configuration.
-        Just to avoid this check later.
-        """
-        p = userParameters
-        if keysToClean is None:
-            keysToClean: list = ['positions',
-                                 'locations',
-                                 'blackListCompanies',
-                                 'blackListTitles']
-        for key in keysToClean:
-            a_list = p[key]
-            if a_list is not None:
-                a_list = list(set(a_list))
-                log.debug("key, a_list: " + key + ", " + str(a_list))
-                try:
-                    a_list.remove(None)
-                    log.debug(f"Removed 'None' from {key}")
-                except:
-                    log.debug(f"No 'None' in {key}")
-            else:
-                log.debug(f"The {key} is None, skipped")
-            if not a_list:
-                a_list = None
-                log.debug(f"{key} is empty and None")
-            p[key] = a_list
-        log.debug(f"Parameters after none_remover: {p}")
-        return p
-
-    with open(configFile, 'r') as stream:
-        try:
-            userParameters: dict = yaml.safe_load(stream)
-        except yaml.YAMLError as exc:
-            log.error(exc)
-            raise exc
-    
-    p = userParameters
-    log.debug(f"Parameters dirty: {p.keys()}")
-    p = check_input_data(p, None)
-    p = check_missing_parameters(p, None)
-
-    if ('uploads') in p and type(p['uploads']) == list:
-        raise Exception("Uploads read from the config file appear to be in list format" +
-                        " while should be dict. Try removing '-' from line containing" +
-                        " filename & path")
-
-    loginInformation={'username' : p['username'],
-                      'password' : p['password'],}
-
-    del p['username']
-    del p['password']
-
-    log.debug(f"Personal information is separated.")
-
-    p = removeNone(p)
- 
-    if (('outputFilename' not in p)
-        or (p['outputFilename'] is not type(str))):
-        p['outputFilename'] = 'output.csv'
-
-    log.debug(f"Cleared parameters: {p}")
-    return userParameters, loginInformation
-
-def parse_command_line_parameters(clParameters: list = None) -> dict:
-    """Define input parameters for command string.
-    Check config file for existing.
-    """
-    log.info("Checking command prompt parameters...")
-    parser = argparse.ArgumentParser(prog="LinkedIn Easy Apply Bot",
-                description="Some parameters to start with command line",
-                usage="The bot options:",
-                formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--config",
-                        type=str,
-                        default="config.yaml",
-                        help="configuration file, YAML formatted")
-    parser.add_argument("--forcelogin",
-                        action='store_true',
-                        help="force login no matter cookies")
-    parser.add_argument("--nobot",
-                        action='store_true',
-                        help="do all setup but not start the bot")
-    parser.add_argument("--fastapply",
-                        type=str,
-                        default=None,
-                        help="fast apply the job by id without apply loop")
-    args = parser.parse_args(clParameters)
-    log.debug(f"Command string parameters: {str(vars(args))}")
-    try:
-        assert os.path.isfile(args.config)
-    except AssertionError as err:
-        log.exception(f"Config file {args.config} doesn't exist")
-        raise err
-    log.debug(f"Config file {args.config} is exist.")
-    if args.fastapply is not None:
-        log.debug(f"Fast apply for {args.fastapply} requested")
-    return vars(args)
-
-def login_to_LinkedIn(login: dict = None,
-                      config: str = None,
-                      browserOptions = None,
-                      forceLogin: bool = 0) -> dict | None:
-    """Login to linkedIn and collect cookies
-    if cookies aren't exist or expired.
-    Otherwise, return stored cookies.
-    """
-    log.info('Login to LinkedIn...')
-    cookiesFileName = config + ".cookies"
-
-    def check_actual_cookies(cookiesFileName: str = None) -> bool:
-        '''Define filename for cookies, try to open it
-        and check cookies actuality
-        '''
-        log.debug("Checking cookies...")
-        cookies: list = None
-        if os.path.exists(cookiesFileName):
-            log.debug(f"Found the cookie file {cookiesFileName}, reading...")
-            try:
-                cookies = pickle.load(open(cookiesFileName, "rb"))
-                log.debug(f"Cookies loaded")
-            except:
-                log.error("Something wrong with the cookie file")
-                raise
-            loginExpires = [cookie['expiry'] for cookie in cookies
-                            if cookie['name'] == 'li_at'][0]
-            if datetime.fromtimestamp(loginExpires) <= datetime.today():
-                log.warning("Auth cookie expiried, need to login.")
-                cookies = None
-            else:
-                log.info("Auth cookie will expire "
-                          + str(datetime.fromtimestamp(loginExpires))
-                          + ", no need to login")
-        else:
-            log.debug(f"The cookie file {cookiesFileName} is not found.")
-            cookies = None
-        return cookies
-
-    def login_in_browser(FileName: str = None,
-                         browserOptions = None,
-                         login: dict = None) -> list:
-        '''Log in by browser and store cookies into the file,
-        return actual cookies.
-        '''
-        log.info("Logging in.....Please wait :)  ")
-        cookies: list = None
-        driver = webdriver.Chrome(service =
-                                  ChromeService(ChromeDriverManager().install()),
-                                  options=browserOptions)
-        driver.get("https://www.linkedin.com/login?trk=guest_homepage-basic_nav-header-signin")
-        try:
-            user_field = driver.find_element("id","username")
-            pw_field = driver.find_element("id","password")
-            login_button = driver.find_element("xpath",
-                        '//*[@id="organic-div"]/form/div[3]/button')
-            user_field.send_keys(login['username'])
-            user_field.send_keys(Keys.TAB)
-            time.sleep(2)
-            pw_field.send_keys(login['password'])
-            time.sleep(2)
-            login_button.click()
-            time.sleep(3)
-        except TimeoutException as err:
-            log.info("TimeoutException! Username/password field"
-                     + "or login button not found")
-            raise err
-        # TODO check login result not by timeout
-        cookies = driver.get_cookies()
-        pickle.dump(cookies, open(FileName, "wb"))
-        driver.close()
-        driver.quit()
-        return cookies
-    
-    if (forceLogin and os.path.exists(cookiesFileName)):
-        log.info("Force Login - cookies are deleted")
-        os.remove(cookiesFileName)
-    cookies = check_actual_cookies(cookiesFileName)
-    if cookies is None:
-        cookies = login_in_browser(cookiesFileName,
-                                   browserOptions,
-                                   login)
-    return cookies
-
 def main() -> None:
+    
     userParameters: dict = None
     login: dict = None
     configCommandString: dict = None
     cookies: list = None
-    browserOptions = get_browser_options()
+    browserOptions = ignition.get_browser_options()
 
-    configCommandString = parse_command_line_parameters(sys.argv[1:])
-    userParameters, login = read_configuration(configCommandString['config'])
+    configCommandString = ignition.parse_command_line_parameters(sys.argv[1:])
+    userParameters, login = ignition.read_configuration(configCommandString['config'])
 
-    cookies = login_to_LinkedIn(login,
+    cookies = ignition.login_to_LinkedIn(login,
                                 configCommandString['config'],
                                 browserOptions,
                                 configCommandString['forcelogin'])
