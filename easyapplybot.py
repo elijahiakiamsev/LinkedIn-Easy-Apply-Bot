@@ -296,10 +296,10 @@ class EasyApplyBot:
             return jobApplied, sendingText
         self.get_job_page(jobID)
         # get easy apply button
-        button = self.get_easy_apply_button()
-        # if there is no Easy Apply button
+        button, message = self.get_easy_apply_button()
+        # if there is something wrong with Easy Apply button
         if button is False:
-            sendingText = f"The EASY APPLY button does not exist for the job id {str(jobID)}."
+            sendingText = f"{str(jobID)} : {message}."
             log.warning(sendingText)
             jobApplied = False
             return jobApplied, sendingText
@@ -376,19 +376,28 @@ class EasyApplyBot:
         self.load_page(sleep=0.5)
         return None
 
-    def get_easy_apply_button(self):
+    def get_easy_apply_button(self) -> object | None:
         log.debug('Getting EASY APPLY button...')
+        button = None
+        message = ""
+        # get the button
         try:
-            button = self.browser.find_elements("xpath",
+            button = self.browser.find_element("xpath",
                 '//div[contains(@class, "jobs-apply-button--top-card")]//button[contains(@class, "jobs-apply-button")]')
-            easyApplyButton = button[0]
-            log.debug(easyApplyButton.tag_name)
+            message = "The button is found"
+            log.debug(message)
         except Exception as e: 
             log.debug("Exception:", e)
-            easyApplyButton = False
-        log.debug(f"Button is enabled? {easyApplyButton.is_enabled()}")
-        log.debug(f"Button is displayed? {easyApplyButton.is_displayed()}")
-        return easyApplyButton
+            button = None
+        # check enabled button
+        if button.is_enabled() == False:
+            button = None
+            message = "The Easy Apply button is not enabled. Perhaps this job is already applied."
+        # check displayed
+        if button.is_displayed() == False:
+            button = None
+            message = "The Easy Apply button is not displayed. Perhaps it is not an Easy Apply job."
+        return button, message
 
     def send_resume(self) -> (bool, str):
         '''The sending resume loop'''
