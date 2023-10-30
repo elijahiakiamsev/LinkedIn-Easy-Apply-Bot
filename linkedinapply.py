@@ -13,6 +13,7 @@ from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
+from selenium.webdriver.remote import webelement as WE
 from selenium.webdriver.support import expected_conditions as EC
 import yaml
 from datetime import datetime
@@ -78,6 +79,34 @@ class EasyApplySeeder:
         self.storeErrors = storeErrors
         return None
     
+    def setLocators(self) -> dict:
+        '''setting hardcoded locators for Easy Apply page'''
+        # TODO put it into yaml file
+        locators: dict = {"next" : {"xpath" : "//button[@aria-label='Continue to next step']",
+                                             "action" : "nextPage"},
+                "review" : {"xpath" : "//button[@aria-label='Review your application']",
+                                             "action" : "nextPage"},
+                "submit" : {"xpath" : "//button[@aria-label='Submit application']",
+                                             "action" : "nextPage"},
+                "error" : {"xpath" : "//div[@data-test-form-element-error-messages]",
+                                             "action" : "error"},
+                "follow" : {"xpath" : "//label[@for='follow-company-checkbox']",
+                                             "action" : "fill"},
+                "homeAddress" : {"xpath" : "//h3[contains(text(),'Home address')]",
+                                             "action" : "fill"},
+                "photo" : {"xpath" : "//span[contains(@class,'t-14') and contains(text(),'Photo')]",
+                                             "action" : "fill"},
+                "resume" : {"xpath" : "//span[contains(text(),'Be sure to include an updated resume')]",
+                                             "action" : "upload"},
+                "coverLetter" : {"xpath" : "//label[contains(text(),'Cover letter')]",
+                                             "action" : "upload"},
+                "succsess" : {"xpath" : "//h2[@id='post-apply-modal']",
+                                             "action" : None},
+                "phone" : {"xpath" : "//input[contains(@id,'phoneNumber-nationalNumber')]",
+                                             "action" : "fill"}
+                }
+        return locators
+
     def setBlueprintFromFile(self,
                              filename: str) -> dict:
         blueprint = None
@@ -86,18 +115,14 @@ class EasyApplySeeder:
         '''get blueprint from yaml file'''
         return blueprint
 
-    def setBlueprintFromDict(self,
-                             blueprint: dict) -> dict:
-        '''get blueprint from dictionary'''
-        pass
-
     def setBlueprint(self,
-                     blueprint: dict | str) -> dict | None:
-        if isinstance(blueprint, dict) : self.setBlueprintFromDict(blueprint)
-        if isinstance(blueprint, str) : self.setBlueprintFromFile(blueprint)
-        if not isinstance(blueprint, str) and not isinstance(blueprint, str):
-            raise TypeError(f"Blueprint should be dictionary or string. Now it is {type(blueprint)}")
-        return None
+                     blueprintSource: dict | str) -> dict | None:
+        blueprint: dict | None = None
+        if isinstance(blueprintSource, dict) : blueprint = blueprintSource
+        if isinstance(blueprintSource, str) : blueprint = self.setBlueprintFromFile(blueprintSource)
+        if not isinstance(blueprintSource, dict) and not isinstance(blueprintSource, str):
+            raise TypeError(f"Blueprint source should be a dictionary or a string. Now it is {type(blueprintSource)}")
+        return blueprint
 
     def scanPage(self) -> bool:
         pass
@@ -138,7 +163,7 @@ class EasyApplySeeder:
         pass
 
     def fillPhoneNumber(self,
-                        phoneElement,
+                        phoneElement: WE.WebElement,
                         phoneNumber: str) -> bool:
         '''Fill the phone number correctly'''
         log.debug("Sending phone number...")

@@ -386,9 +386,11 @@ class EasyApplyBot:
                 '//div[contains(@class, "jobs-apply-button--top-card")]//button[contains(@class, "jobs-apply-button")]')
             message = "The button is found"
             log.debug(message)
-        except Exception as e: 
-            log.debug("Exception:", e)
+        except Exception as e:
             button = None
+            message = (f"Exception: {e}") 
+            log.debug(message)
+            return button, message
         # check enabled button
         if button.is_enabled() == False:
             button = None
@@ -401,29 +403,7 @@ class EasyApplyBot:
 
     def send_resume(self) -> (bool, str):
         '''The sending resume loop'''
-        locatorsBlueprint: dict = {"next" : {"xpath" : "//button[@aria-label='Continue to next step']",
-                                             "action" : "nextPage"},
-                "review" : {"xpath" : "//button[@aria-label='Review your application']",
-                                             "action" : "nextPage"},
-                "submit" : {"xpath" : "//button[@aria-label='Submit application']",
-                                             "action" : "nextPage"},
-                "error" : {"xpath" : "//div[@data-test-form-element-error-messages]",
-                                             "action" : "error"},
-                "follow" : {"xpath" : "//label[@for='follow-company-checkbox']",
-                                             "action" : "fill"},
-                "homeAddress" : {"xpath" : "//h3[contains(text(),'Home address')]",
-                                             "action" : "fill"},
-                "photo" : {"xpath" : "//span[contains(@class,'t-14') and contains(text(),'Photo')]",
-                                             "action" : "fill"},
-                "resume" : {"xpath" : "//span[contains(text(),'Be sure to include an updated resume')]",
-                                             "action" : "upload"},
-                "coverLetter" : {"xpath" : "//label[contains(text(),'Cover letter')]",
-                                             "action" : "upload"},
-                "succsess" : {"xpath" : "//h2[@id='post-apply-modal']",
-                                             "action" : None},
-                "phone" : {"xpath" : "//input[contains(@id,'phoneNumber-nationalNumber')]",
-                                             "action" : "fill"}
-                }
+        locatorsBlueprint = self.seedEA.setBlueprint(self.seedEA.setLocators())
         submitted: bool = False
 
         def get_easy_apply_locators(blueprint: dict = locatorsBlueprint
