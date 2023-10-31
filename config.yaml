@@ -1,6 +1,6 @@
 username:
 password:
-phoneNumber:
+phone_number:
 
 positions:
 - Data Scientist
@@ -17,15 +17,15 @@ uploads:
 #  Cover Letter: # PATH TO cover letter
 #  Photo: # PATH TO photo
 
-outputFilename: # PATH TO OUTPUT FILE (default output.csv)
+output_filename: # PATH TO OUTPUT FILE (default output.csv)
 
-blackListCompanies:
+black_list_companies:
 - # Company names you want to ignore
 
-blackListTitles:
+black_list_titles:
 - # Add job titles you want to ignore
 
-jobListFilterKeys:
+job_list_filter_keys:
 - Most Recent # Most Recent | Most Relevant - Sort by
 - Any Time # Any Time | Past Month | Past Week | Past 24 hours - Date posted
 - Fast Apply # Fast Apply | Usual Apply - work only with fast apply or get the full job list

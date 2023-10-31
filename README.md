@@ -18,7 +18,7 @@ Enter your username, password, and search settings into the `config.yaml` file
 ```yaml
 username: # Insert your username here
 password: # Insert your password here
-phoneNumber: # Insert your phone number here
+phone_number: # Insert your phone number here
 
 positions:
 - # positions you want to search for
@@ -36,15 +36,15 @@ uploads:
  Photo: # PATH TO photo
 # Note file_key:file_paths contained inside the uploads section should be writted without a dash ('-') 
 
-outputFilename: # PATH TO OUTPUT FILE (default output.csv)
+output_filename: # PATH TO OUTPUT FILE (default output.csv)
 
-blackListCompanies:
+black_list_companies:
 - # Company names you want to ignore
 
-blackListTitles:
+black_list_titles:
 - # Add job titles you want to ignore
 
-jobListFilterKeys:
+job_list_filter_keys:
 - Most Recent # Most Recent | Most Relevant - Sort by
 - Any Time # Any Time | Past Month | Past Week | Past 24 hours - Date posted
 - Fast Apply # Fast Apply | Usual Apply - work only with fast apply or get the full job list
