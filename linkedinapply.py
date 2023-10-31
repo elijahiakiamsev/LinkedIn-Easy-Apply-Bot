@@ -58,28 +58,28 @@ class LinkedInSeeder:
 class EasyApplySeeder:
 
     def __init__(self,
-                 jobID: int | None = None,
+                 job_id: int | None = None,
                  browser: object | None = None,
                  blueprint: dict | None = None,
                  blueprintFile: str | None = None,
-                 jobTitle: str | None = None,
-                 fileResume: str | None = None,
-                 filePhoto: str | None = None,
-                 applyParameters: dict | None = None,
-                 storeErrors: bool = False
+                 job_title: str | None = None,
+                 file_resume: str | None = None,
+                 file_photo: str | None = None,
+                 apply_parameters: dict | None = None,
+                 store_errors: bool = False
                  ) -> None:
-        self.jobIDs = jobID
+        self.job_ids = job_id
         self.browser = browser
         self.blueprint = blueprint
         self.blueprintFile = blueprintFile
-        self.jobTitle = jobTitle
-        self.fileResume = fileResume
-        self.filePhoto = filePhoto
-        self.applyParameters = applyParameters
-        self.storeErrors = storeErrors
+        self.jobTitle = job_title
+        self.fileResume = file_resume
+        self.filePhoto = file_photo
+        self.applyParameters = apply_parameters
+        self.storeErrors = store_errors
         return None
     
-    def setLocators(self) -> dict:
+    def set_locators(self) -> dict:
         '''setting hardcoded locators for Easy Apply page'''
         # TODO put it into yaml file
         locators: dict = {"next" : {"xpath" : "//button[@aria-label='Continue to next step']",
@@ -107,7 +107,7 @@ class EasyApplySeeder:
                 }
         return locators
 
-    def setBlueprintFromFile(self,
+    def set_blueprint_from_file(self,
                              filename: str) -> dict:
         blueprint = None
         if not isinstance(filename, str):
@@ -115,61 +115,61 @@ class EasyApplySeeder:
         '''get blueprint from yaml file'''
         return blueprint
 
-    def setBlueprint(self,
-                     blueprintSource: dict | str) -> dict | None:
+    def set_blueprint(self,
+                     blueprint_source: dict | str) -> dict | None:
         blueprint: dict | None = None
-        if isinstance(blueprintSource, dict) : blueprint = blueprintSource
-        if isinstance(blueprintSource, str) : blueprint = self.setBlueprintFromFile(blueprintSource)
-        if not isinstance(blueprintSource, dict) and not isinstance(blueprintSource, str):
-            raise TypeError(f"Blueprint source should be a dictionary or a string. Now it is {type(blueprintSource)}")
+        if isinstance(blueprint_source, dict) : blueprint = blueprint_source
+        if isinstance(blueprint_source, str) : blueprint = self.setBlueprintFromFile(blueprint_source)
+        if not isinstance(blueprint_source, dict) and not isinstance(blueprint_source, str):
+            raise TypeError(f"Blueprint source should be a dictionary or a string. Now it is {type(blueprint_source)}")
         return blueprint
 
     def scanPage(self) -> bool:
         pass
 
-    def checkLocators(self,
-                       locators: dict) -> (bool, str):
+    def check_locators(self,
+                      locators: dict) -> (bool, str):
         '''All negative checks to continue in one place'''
         log.debug("Checks to continue started..")
-        checkStatus : bool = True
-        checkMessage : str = "All checks passed."
+        check_status : bool = True
+        check_message : str = "All checks passed."
         # Didn't find anything on the page
         if locators is None :
-            checkStatus = False
-            checkMessage = "No locators found on the page."
-            return checkStatus, checkMessage
+            check_status = False
+            check_message = "No locators found on the page."
+            return check_status, check_message
         # Found an Error on page
         if locators['error']['element'] is not None:
-            checkStatus = False
-            checkMessage = f"EASY APPLY skipped by error: {locators['error']['element'].text}"
+            check_status = False
+            check_message = f"EASY APPLY skipped by error: {locators['error']['element'].text}"
         # Didn't find any button to continue
         if len({key for key in locators if locators[key]['action'] == 'nextPage'}) == 0:
-            checkStatus = False
-            checkMessage = "EASY APPLY skipped by error: no continue buttons found"
+            check_status = False
+            check_message = "EASY APPLY skipped by error: no continue buttons found"
         # Found more than one button to continue
         if len({key for key in locators if locators[key]['action'] == 'nextPage'
                 and locators[key]['element'] is not None}) > 1:
-            checkStatus = False
+            check_status = False
             log.debug(f"Length of buttons dict: {len({key for key in locators if locators[key]['action'] == 'nextPage' and locators[key]['element'] is not None})}")
-            checkMessage = "EASY APPLY skipped by error: more than one button found"
+            check_message = "EASY APPLY skipped by error: more than one button found"
         # All good
-        log.debug(f"Check status {str(checkStatus)} : {checkMessage}")
-        return checkStatus, checkMessage
+        log.debug(f"Check status {str(check_status)} : {check_message}")
+        return check_status, check_message
 
-    def startApplyLoop(self) -> bool:
+    def start_apply_loop(self) -> bool:
         pass
 
-    def storeResults(self) -> dict:
+    def store_results(self) -> dict:
         pass
 
-    def fillPhoneNumber(self,
-                        phoneElement: WE.WebElement,
-                        phoneNumber: str) -> bool:
+    def fill_phone_number(self,
+                        phone_element: WE.WebElement,
+                        phone_number: str) -> bool:
         '''Fill the phone number correctly'''
         log.debug("Sending phone number...")
-        if phoneElement:
-            phoneElement.clear()
-            phoneElement.send_keys(phoneNumber)
+        if phone_element:
+            phone_element.clear()
+            phone_element.send_keys(phone_number)
         else:
             log.warning("No phone element sended")
         return True

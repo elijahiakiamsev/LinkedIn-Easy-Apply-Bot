@@ -42,6 +42,7 @@ def get_browser_options():
     # Disable webdriver flags or you will be easily detectable
     options.add_argument("--disable-blink-features")
     options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--headless")
     return options
 
 def read_configuration(configFile: str = 'config.yaml') -> tuple[dict, dict]:
@@ -50,44 +51,44 @@ def read_configuration(configFile: str = 'config.yaml') -> tuple[dict, dict]:
     are separated from other parameters for security reasons. 
     """
     log.debug("Reading configuration...")
-    def check_missing_parameters(parametersToCheck: dict = None,
-                                 keysToCheck: list = None) -> None:
+    def check_missing_parameters(parameters_to_check: dict = None,
+                                 keys_to_check: list = None) -> None:
         """Check and add missing parameters if something wrong
         with a config file
         """
-        p = parametersToCheck
-        if keysToCheck is None:
-            keysToCheck = ['username',
+        p = parameters_to_check
+        if keys_to_check is None:
+            keys_to_check = ['username',
                            'password',
-                           'phoneNumber',
+                           'phone_number',
                            'positions',
                            'locations',
                            'uploads',
-                           'outputFilename',
-                           'blackListCompanies',
-                           'blackListTitles',
-                           'jobListFilterKeys']
-        for key in keysToCheck:
+                           'output_filename',
+                           'black_list_companies',
+                           'black_list_titles',
+                           'job_list_filter_keys']
+        for key in keys_to_check:
             if key not in p:
                 p[key] = None
                 log.debug(f"Check: added missing parameter {key}")
         
         for key in list(p.keys()):
-            if key not in keysToCheck:
+            if key not in keys_to_check:
                log.warning(f"Check: unknown parameter {key}") 
         return p
 
-    def check_input_data(parametersToCheck: dict = None,
-                         keysToCheck: list = None) -> bool:
+    def check_input_data(parameters_to_check: dict = None,
+                         keys_to_check: list = None) -> bool:
         """Check the parameters data completion."""
-        p = parametersToCheck
-        if keysToCheck is None:
-            keysToCheck = ['username',
+        p = parameters_to_check
+        if keys_to_check is None:
+            keys_to_check = ['username',
                            'password',
                            'locations',
                            'positions',
-                           'phoneNumber']
-        for key in keysToCheck:
+                           'phone_number']
+        for key in keys_to_check:
             try:
                 assert key in p
             except AssertionError as err:
@@ -110,19 +111,19 @@ def read_configuration(configFile: str = 'config.yaml') -> tuple[dict, dict]:
         log.debug("Input data checked for completion.")
         return p
 
-    def removeNone(userParameters: dict = None,
-                    keysToClean: list = None) -> dict:
+    def removeNone(user_parameters: dict = None,
+                    keys_to_clean: list = None) -> dict:
         """
         Remove None from some lists in configuration.
         Just to avoid this check later.
         """
-        p = userParameters
-        if keysToClean is None:
-            keysToClean: list = ['positions',
+        p = user_parameters
+        if keys_to_clean is None:
+            keys_to_clean: list = ['positions',
                                  'locations',
                                  'blackListCompanies',
                                  'blackListTitles']
-        for key in keysToClean:
+        for key in keys_to_clean:
             a_list = p[key]
             if a_list is not None:
                 a_list = list(set(a_list))
@@ -143,12 +144,12 @@ def read_configuration(configFile: str = 'config.yaml') -> tuple[dict, dict]:
 
     with open(configFile, 'r') as stream:
         try:
-            userParameters: dict = yaml.safe_load(stream)
+            user_parameters: dict = yaml.safe_load(stream)
         except yaml.YAMLError as exc:
             log.error(exc)
             raise exc
     
-    p = userParameters
+    p = user_parameters
     log.debug(f"Parameters dirty: {p.keys()}")
     p = check_input_data(p, None)
     p = check_missing_parameters(p, None)
@@ -158,7 +159,7 @@ def read_configuration(configFile: str = 'config.yaml') -> tuple[dict, dict]:
                         " while should be dict. Try removing '-' from line containing" +
                         " filename & path")
 
-    loginInformation={'username' : p['username'],
+    login_information={'username' : p['username'],
                       'password' : p['password'],}
 
     del p['username']
@@ -168,14 +169,14 @@ def read_configuration(configFile: str = 'config.yaml') -> tuple[dict, dict]:
 
     p = removeNone(p)
  
-    if (('outputFilename' not in p)
-        or (p['outputFilename'] is not type(str))):
-        p['outputFilename'] = 'output.csv'
+    if (('output_filename' not in p)
+        or (p['output_filename'] is not type(str))):
+        p['output_filename'] = 'output.csv'
 
     log.debug(f"Cleared parameters: {p}")
-    return userParameters, loginInformation
+    return user_parameters, login_information
 
-def parse_command_line_parameters(clParameters: list = None) -> dict:
+def parse_command_line_parameters(cl_parameters: list = None) -> dict:
     """Define input parameters for command string.
     Check config file for existing.
     """
@@ -188,7 +189,7 @@ def parse_command_line_parameters(clParameters: list = None) -> dict:
                         type=str,
                         default="config.yaml",
                         help="configuration file, YAML formatted")
-    parser.add_argument("--forcelogin",
+    parser.add_argument("--force_login",
                         action='store_true',
                         help="force login no matter cookies")
     parser.add_argument("--nobot",
@@ -198,7 +199,7 @@ def parse_command_line_parameters(clParameters: list = None) -> dict:
                         type=str,
                         default=None,
                         help="fast apply the job by id without apply loop")
-    args = parser.parse_args(clParameters)
+    args = parser.parse_args(cl_parameters)
     log.debug(f"Command string parameters: {str(vars(args))}")
     try:
         assert os.path.isfile(args.config)
@@ -210,47 +211,47 @@ def parse_command_line_parameters(clParameters: list = None) -> dict:
         log.debug(f"Fast apply for {args.fastapply} requested")
     return vars(args)
 
-def login_to_LinkedIn(login: dict = None,
+def login_to_linkedin(login: dict = None,
                       config: str = None,
-                      browserOptions = None,
-                      forceLogin: bool = 0) -> dict | None:
+                      browser_options = None,
+                      force_login: bool = 0) -> dict | None:
     """Login to linkedIn and collect cookies
     if cookies aren't exist or expired.
     Otherwise, return stored cookies.
     """
     log.info('Login to LinkedIn...')
-    cookiesFileName = config + ".cookies"
+    cookies_filename = config + ".cookies"
 
-    def check_actual_cookies(cookiesFileName: str = None) -> bool:
+    def check_actual_cookies(cookies_filename: str = None) -> bool:
         '''Define filename for cookies, try to open it
         and check cookies actuality
         '''
         log.debug("Checking cookies...")
         cookies: list = None
-        if os.path.exists(cookiesFileName):
-            log.debug(f"Found the cookie file {cookiesFileName}, reading...")
+        if os.path.exists(cookies_filename):
+            log.debug(f"Found the cookie file {cookies_filename}, reading...")
             try:
-                cookies = pickle.load(open(cookiesFileName, "rb"))
+                cookies = pickle.load(open(cookies_filename, "rb"))
                 log.debug(f"Cookies loaded")
             except:
                 log.error("Something wrong with the cookie file")
                 raise
-            loginExpires = [cookie['expiry'] for cookie in cookies
+            login_expires = [cookie['expiry'] for cookie in cookies
                             if cookie['name'] == 'li_at'][0]
-            if datetime.fromtimestamp(loginExpires) <= datetime.today():
+            if datetime.fromtimestamp(login_expires) <= datetime.today():
                 log.warning("Auth cookie expiried, need to login.")
                 cookies = None
             else:
                 log.info("Auth cookie will expire "
-                          + str(datetime.fromtimestamp(loginExpires))
+                          + str(datetime.fromtimestamp(login_expires))
                           + ", no need to login")
         else:
-            log.debug(f"The cookie file {cookiesFileName} is not found.")
+            log.debug(f"The cookie file {cookies_filename} is not found.")
             cookies = None
         return cookies
 
-    def login_in_browser(FileName: str = None,
-                         browserOptions = None,
+    def login_in_browser(filename: str = None,
+                         browser_options = None,
                          login: dict = None) -> list:
         '''Log in by browser and store cookies into the file,
         return actual cookies.
@@ -259,7 +260,7 @@ def login_to_LinkedIn(login: dict = None,
         cookies: list = None
         driver = webdriver.Chrome(service =
                                   ChromeService(ChromeDriverManager().install()),
-                                  options=browserOptions)
+                                  options=browser_options)
         driver.get("https://www.linkedin.com/login?trk=guest_homepage-basic_nav-header-signin")
         try:
             user_field = driver.find_element("id","username")
@@ -279,17 +280,17 @@ def login_to_LinkedIn(login: dict = None,
             raise err
         # TODO check login result not by timeout
         cookies = driver.get_cookies()
-        pickle.dump(cookies, open(FileName, "wb"))
+        pickle.dump(cookies, open(filename, "wb"))
         driver.close()
         driver.quit()
         return cookies
     
-    if (forceLogin and os.path.exists(cookiesFileName)):
+    if (force_login and os.path.exists(cookies_filename)):
         log.info("Force Login - cookies are deleted")
-        os.remove(cookiesFileName)
-    cookies = check_actual_cookies(cookiesFileName)
+        os.remove(cookies_filename)
+    cookies = check_actual_cookies(cookies_filename)
     if cookies is None:
-        cookies = login_in_browser(cookiesFileName,
-                                   browserOptions,
+        cookies = login_in_browser(cookies_filename,
+                                   browser_options,
                                    login)
     return cookies
