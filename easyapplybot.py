@@ -403,7 +403,7 @@ class EasyApplyBot:
 
     def send_resume(self) -> (bool, str):
         '''The sending resume loop'''
-        locators_blueprint = self.seedEA.set_blueprint(self.seedEA.setLocators())
+        locators_blueprint = self.seedEA.set_blueprint(self.seedEA.set_locators())
         submitted: bool = False
 
         def get_easy_apply_locators(blueprint: dict = locators_blueprint
@@ -477,7 +477,7 @@ class EasyApplyBot:
         while True:
             locators, message = get_easy_apply_locators()
             # Check to continue (fail fast)
-            is_it_good, message = self.seedEA.checkLocators(locators)
+            is_it_good, message = self.seedEA.check_locators(locators)
             if not is_it_good :
                 log.debug("Check failed, breaking the loop.")
                 break
@@ -613,7 +613,7 @@ def main() -> None:
     config_command_string = ignition.parse_command_line_parameters(sys.argv[1:])
     user_parameters, login = ignition.read_configuration(config_command_string['config'])
 
-    cookies = ignition.login_to_LinkedIn(login,
+    cookies = ignition.login_to_linkedin(login,
                                 config_command_string['config'],
                                 browser_options,
                                 config_command_string['forcelogin'])

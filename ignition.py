@@ -42,7 +42,6 @@ def get_browser_options():
     # Disable webdriver flags or you will be easily detectable
     options.add_argument("--disable-blink-features")
     options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument("--headless")
     return options
 
 def read_configuration(configFile: str = 'config.yaml') -> tuple[dict, dict]:
@@ -121,8 +120,8 @@ def read_configuration(configFile: str = 'config.yaml') -> tuple[dict, dict]:
         if keys_to_clean is None:
             keys_to_clean: list = ['positions',
                                  'locations',
-                                 'blackListCompanies',
-                                 'blackListTitles']
+                                 'black_list_companies',
+                                 'black_list_titles']
         for key in keys_to_clean:
             a_list = p[key]
             if a_list is not None:
@@ -189,7 +188,7 @@ def parse_command_line_parameters(cl_parameters: list = None) -> dict:
                         type=str,
                         default="config.yaml",
                         help="configuration file, YAML formatted")
-    parser.add_argument("--force_login",
+    parser.add_argument("--forcelogin",
                         action='store_true',
                         help="force login no matter cookies")
     parser.add_argument("--nobot",
@@ -214,7 +213,7 @@ def parse_command_line_parameters(cl_parameters: list = None) -> dict:
 def login_to_linkedin(login: dict = None,
                       config: str = None,
                       browser_options = None,
-                      force_login: bool = 0) -> dict | None:
+                      forcelogin: bool = 0) -> dict | None:
     """Login to linkedIn and collect cookies
     if cookies aren't exist or expired.
     Otherwise, return stored cookies.
@@ -285,7 +284,7 @@ def login_to_linkedin(login: dict = None,
         driver.quit()
         return cookies
     
-    if (force_login and os.path.exists(cookies_filename)):
+    if (forcelogin and os.path.exists(cookies_filename)):
         log.info("Force Login - cookies are deleted")
         os.remove(cookies_filename)
     cookies = check_actual_cookies(cookies_filename)
