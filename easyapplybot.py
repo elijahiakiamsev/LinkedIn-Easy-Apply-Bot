@@ -14,11 +14,9 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 import bs4
 import pandas as pd
-import pyautogui
 import ignition
 import linkedinapply as LA
 
-import yaml
 from datetime import datetime, timedelta
 
 log = logging.getLogger('mainLogger')
@@ -534,14 +532,7 @@ class EasyApplyBot:
 
     def avoid_lock(self) -> None:
         '''Imitate human on page'''
-        x, _ = pyautogui.position()
-        pyautogui.moveTo(x + 200, pyautogui.position().y, duration=1.0)
-        pyautogui.moveTo(x, pyautogui.position().y, duration=0.5)
-        pyautogui.keyDown('ctrl')
-        pyautogui.press('esc')
-        pyautogui.keyUp('ctrl')
         time.sleep(0.5)
-        pyautogui.press('esc')
         log.debug("Lock avoided.")
         return None
 

@@ -1,10 +1,5 @@
 from __future__ import annotations
-import time, random, os, csv, sys
 import logging
-import argparse
-import pickle
-import datetime
-from itertools import product
 from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service as ChromeService
@@ -15,8 +10,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote import webelement as WE
 from selenium.webdriver.support import expected_conditions as EC
-import yaml
-from datetime import datetime
 
 log = logging.getLogger('mainLogger')
 
